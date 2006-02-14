@@ -68,7 +68,6 @@ import string
 import getopt
 import db
 import mgi_utils
-import accessionlib
 import loadlib
 
 #globals
@@ -247,8 +246,7 @@ def init():
 
 	errorFile.write('Start Date/Time: %s\n\n' % (mgi_utils.date()))
 
-	mgiTypeKey = accessionlib.get_MGIType_key(mgiType)
-
+	mgiTypeKey = loadlib.verifyMGIType(mgiType, 0, errorFile)
 	createdByKey = loadlib.verifyUser(createdBy, 0, errorFile)
 
 	db.sql('delete from MGI_Reference_Assoc where _MGIType_key = %d ' % (mgiTypeKey) + \
