@@ -375,18 +375,7 @@ def processFile():
 		except:
 			exit(1, 'Invalid Line (%d): %s\n' % (lineNum, line))
 
-		# could move to verifyObject routine
-		# accessionlib.get_Object_key uses ACC_View which assumes the object has an Actual DB record
-
-		results = db.sql('select _Object_key from ACC_Accession ' + \
-			'where _MGIType_key = %d ' % (mgiTypeKey) + \
-			'and accid = "%s"' % (accID), 'auto')
-		if len(results) > 0:
-	    		objectKey = results[0]['_Object_key']
-		else:
-	    		objectKey = 0
-		        errorFile.write('Invalid Strain (%d) %s\n' % (lineNum, accID))
-
+		objectKey = loadlib.verifyObject(accID, mgiTypeKey, None, lineNum, errorFile)
 		referenceKey = loadlib.verifyReference(jnum, lineNum, errorFile)
 		refAssocTypeKey = verifyRefAssocType(refAssocType, lineNum)
 #		createdByKey = loadlib.verifyUser(createdBy, lineNum, errorFile)
