@@ -1,6 +1,5 @@
 #!/usr/local/bin/python
 
-'''
 #
 # Purpose:
 #
@@ -23,6 +22,13 @@
 #		field 2: J: (J:#####)
 #		field 3: Reference Association Type
 #		field 4: Created By
+#
+# for JRS:
+#
+#		field 1: JRS ID
+#		field 2: J:
+#		field 3: Reference Type
+#		ignore the rest
 #
 # Parameters:
 #	-S = database server
@@ -53,8 +59,8 @@
 #
 # 02/09/2006	lec
 #	- new; JRS cutover
+#	- can be converted for general use after JRS load...
 #
-'''
 
 import sys
 import os
@@ -71,7 +77,6 @@ DEBUG = 0		# set DEBUG to false unless preview mode is selected
 bcpon = 1		# can the bcp files be bcp-ed into the database?  default is yes.
 
 inputFile = ''		# file descriptor
-outputFile = ''		# file descriptor
 diagFile = ''		# file descriptor
 errorFile = ''		# file descriptor
 refFile = ''		# file descriptor
@@ -84,13 +89,15 @@ refFileName = ''	# file name
 mode = ''		# processing mode
 refAssocKey = 0		# MGI_Reference_Assoc._Assoc_key
 mgiTypeKey = 0
+createdBy = 'jrs_load'
+createdByKey = 0
 
-refTypeDict = []	# dictionary of reference association types for given object
+refTypeDict = {}	# dictionary of reference association types for given object
+refDict = {}		# existing MGI_Reference_Assoc records for given object
 
 loaddate = loadlib.loaddate
 
 def showUsage():
-	'''
 	# requires:
 	#
 	# effects:
@@ -98,7 +105,6 @@ def showUsage():
 	# with status of 1.
 	#
 	# returns:
-	'''
  
 	usage = 'usage: %s -S server\n' % sys.argv[0] + \
 		'-D database\n' + \
@@ -110,7 +116,6 @@ def showUsage():
 	exit(1, usage)
  
 def exit(status, message = None):
-	'''
 	# requires: status, the numeric exit status (integer)
 	#           message (string)
 	#
@@ -119,14 +124,12 @@ def exit(status, message = None):
 	#
 	# returns:
 	#
-	'''
  
 	if message is not None:
 		sys.stderr.write('\n' + str(message) + '\n')
  
 	try:
 		inputFile.close()
-		outputFile.close()
 		diagFile.write('\n\nEnd Date/Time: %s\n' % (mgi_utils.date()))
 		errorFile.write('\n\nEnd Date/Time: %s\n' % (mgi_utils.date()))
 		diagFile.close()
@@ -138,7 +141,6 @@ def exit(status, message = None):
 	sys.exit(status)
  
 def init():
-	'''
 	# requires: 
 	#
 	# effects: 
@@ -149,12 +151,11 @@ def init():
 	#
 	# returns:
 	#
-	'''
  
-	global inputFile, outputFile, diagFile, errorFile, errorFileName, diagFileName, passwordFileName
+	global inputFile, diagFile, errorFile, errorFileName, diagFileName, passwordFileName
 	global refFileName, refFile
 	global mode, mgiTypeKey
-	global refAssocKey
+	global refAssocKey, createdByKey
  
 	try:
 		optlist, args = getopt.getopt(sys.argv[1:], 'S:D:U:P:M:O:I:')
@@ -207,7 +208,6 @@ def init():
  
 	fdate = mgi_utils.date('%m%d%Y')	# current date
 	head, tail = os.path.split(inputFileName) 
-        outputFileName = inputFileName + '.out'
 	diagFileName = tail + '.' + fdate + '.diagnostics'
 	errorFileName = tail + '.' + fdate + '.error'
 	refFileName = tail + '.MGI_Reference_Assoc.bcp'
@@ -216,11 +216,6 @@ def init():
 		inputFile = open(inputFileName, 'r')
 	except:
 		exit(1, 'Could not open file %s\n' % inputFileName)
-		
-	try:
-		outputFile = open(outputFileName, 'w')
-	except:
-		exit(1, 'Could not open file %s\n' % outputFileName)
 		
 	try:
 		diagFile = open(diagFileName, 'w')
@@ -254,8 +249,12 @@ def init():
 
 	mgiTypeKey = accessionlib.get_MGIType_key(mgiType)
 
+	createdByKey = loadlib.verifyUser(createdBy, 0, errorFile)
+
+	db.sql('delete from MGI_Reference_Assoc where _MGIType_key = %d ' % (mgiTypeKey) + \
+		'and _CreatedBy_key = %d ' % (createdByKey), None)
+
 def verifyMode():
-	'''
 	# requires:
 	#
 	# effects:
@@ -267,7 +266,6 @@ def verifyMode():
 	# returns:
 	#	nothing
 	#
-	'''
 
 	global DEBUG, bcpon
 
@@ -278,7 +276,6 @@ def verifyMode():
 		exit(1, 'Invalid Processing Mode:  %s\n' % (mode))
 
 def setPrimaryKeys():
-	'''
 	# requires:
 	#
 	# effects:
@@ -287,7 +284,6 @@ def setPrimaryKeys():
 	# returns:
 	#	nothing
 	#
-	'''
 
 	global refAssocKey
 
@@ -298,7 +294,6 @@ def setPrimaryKeys():
                 refAssocKey = results[0]['maxKey']
 
 def loadDictionaries():
-	'''
 	# requires:
 	#
 	# effects:
@@ -307,16 +302,22 @@ def loadDictionaries():
 	#
 	# returns:
 	#	nothing
-	'''
 
-	global refTypeDict
+	global refTypeDict, refDict
 
-	results = db.sql('select _RefAssocType_key, assocType from MGI_RefAssocType where _MGIType_key = %s' % (mgiTypeKey), 'auto')
+	results = db.sql('select _RefAssocType_key, assocType ' + \
+		'from MGI_RefAssocType where _MGIType_key = %s' % (mgiTypeKey), 'auto')
 	for r in results:
 		refTypeDict[r['assocType']] = r['_RefAssocType_key']
 
+	results = db.sql('select _Object_key, _Refs_key, _RefAssocType_key ' + \
+		'from MGI_Reference_Assoc where _MGIType_key = %s' % (mgiTypeKey), 'auto')
+	for r in results:
+		key = '%s:%s:%s' % (r['_Object_key'], r['_Refs_key'], r['_RefAssocType_key'])
+		value = r
+		refDict[key] = value
+
 def verifyRefAssocType(refAssocType, lineNum):
-	'''
 	# requires:
 	#	refAssocType - the Synonym Type
 	#	lineNum - the line number of the record from the input file
@@ -330,12 +331,11 @@ def verifyRefAssocType(refAssocType, lineNum):
 	#	0 if the Synonym Type is invalid
 	#	Synonym Type Key if the Synonym Type is valid
 	#
-	'''
 
 	refAssocTypeKey = 0
 
-	if refAssocTypeDict.has_key(refAssocType):
-		refAssocTypeKey = refAssocTypeDict[refAssocType]
+	if refTypeDict.has_key(refAssocType):
+		refAssocTypeKey = refTypeDict[refAssocType]
 	else:
 		errorFile.write('Invalid Synonym Type (%d) %s\n' % (lineNum, refAssocType))
 		refAssocTypeKey = 0
@@ -343,7 +343,6 @@ def verifyRefAssocType(refAssocType, lineNum):
 	return(refAssocTypeKey)
 
 def processFile():
-	'''
 	# requires:
 	#
 	# effects:
@@ -353,12 +352,12 @@ def processFile():
 	# returns:
 	#	nothing
 	#
-	'''
 
 	global refAssocKey
 
 	lineNum = 0
 	# For each line in the input file
+
 
 	for line in inputFile.readlines():
 
@@ -372,19 +371,30 @@ def processFile():
 			accID = tokens[0]
 			jnum = tokens[1]
 			refAssocType = tokens[2]
-			user = tokens[3]
+#			createdBy = tokens[3]
 		except:
 			exit(1, 'Invalid Line (%d): %s\n' % (lineNum, line))
 
-		objectKey = accessionlib.get_Object_key(accID, _MGIType_key = mgiTypeKey)
+		# could move to verifyObject routine
+		# accessionlib.get_Object_key uses ACC_View which assumes the object has an Actual DB record
+
+		results = db.sql('select _Object_key from ACC_Accession ' + \
+			'where _MGIType_key = %d ' % (mgiTypeKey) + \
+			'and accid = "%s"' % (accID), 'auto')
+		if len(results) > 0:
+	    		objectKey = results[0]['_Object_key']
+		else:
+	    		objectKey = 0
+		        errorFile.write('Invalid Strain (%d) %s\n' % (lineNum, accID))
+
 		referenceKey = loadlib.verifyReference(jnum, lineNum, errorFile)
-		refAssocTypeKey = verifyRefAssocType(refAssocType, lineNum, errorFile)
-		userKey = loadlib.verifyUser(userKey, lineNum, errorFile)
+		refAssocTypeKey = verifyRefAssocType(refAssocType, lineNum)
+#		createdByKey = loadlib.verifyUser(createdBy, lineNum, errorFile)
 
 		if objectKey == 0 or \
 			referenceKey == 0 or \
 			refAssocTypeKey == 0 or \
-			userKey == 0:
+			createdByKey == 0:
 
 			# set error flag to true
 			error = 1
@@ -395,15 +405,21 @@ def processFile():
 
 		# if no errors, process the marker
 
-        	refFile.write('%d|%d|%d|%d|%d|%s|%s|%s|%s\n' \
-			% (refAssocKey, referenceKey, objectKey, mgiTypeKey, refAssocTypeKey, userKey, userKey, loaddate, loaddate))
+		# could move to verifyDuplicate routine
+
+		key = '%s:%s:%s' % (objectKey, referenceKey, refAssocTypeKey)
+		if refDict.has_key(key):
+		        errorFile.write('Duplicate (%d) %s\n' % (lineNum, line))
+			continue
+
+        	refFile.write('%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+			% (refAssocKey, referenceKey, objectKey, mgiTypeKey, refAssocTypeKey, createdByKey, createdByKey, loaddate, loaddate))
 
 		refAssocKey = refAssocKey + 1
 
 #	end of "for line in inputFile.readlines():"
 
 def bcpFiles():
-	'''
 	# requires:
 	#
 	# effects:
@@ -412,7 +428,6 @@ def bcpFiles():
 	# returns:
 	#	nothing
 	#
-	'''
 
 	bcpdelim = "|"
 
