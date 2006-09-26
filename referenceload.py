@@ -30,15 +30,6 @@
 #		field 3: Reference Type
 #		ignore the rest
 #
-# Parameters:
-#	-S = database server
-#	-D = database
-#	-U = user
-#	-P = password file
-#	-M = mode (load, preview, broadcast)
-#	-O = object type
-#	-I = input file
-#
 #	processing modes:
 #		load - load the data
 #
@@ -65,12 +56,21 @@
 import sys
 import os
 import string
-import getopt
 import db
 import mgi_utils
 import loadlib
 
 #globals
+
+#
+# from configuration file
+#
+user = os.environ['MGD_DBUSER']
+passwordFileName = os.environ['MGD_DBPASSWORDFILE']
+mode = os.environ['REFMODE']
+inputFileName = os.environ['REFINPUTFILE']
+mgiType = os.environ['REFOBJECTTYPE']
+createdBy = os.environ['CREATEDBY']
 
 DEBUG = 0		# set DEBUG to false unless preview mode is selected
 bcpon = 1		# can the bcp files be bcp-ed into the database?  default is yes.
@@ -82,13 +82,10 @@ refFile = ''		# file descriptor
 
 diagFileName = ''	# file name
 errorFileName = ''	# file name
-passwordFileName = ''	# file name
 refFileName = ''	# file name
 
-mode = ''		# processing mode
 refAssocKey = 0		# MGI_Reference_Assoc._Assoc_key
 mgiTypeKey = 0
-createdBy = 'jrs_load'
 createdByKey = 0
 
 refTypeDict = {}	# dictionary of reference association types for given object
@@ -96,24 +93,6 @@ refDict = {}		# existing MGI_Reference_Assoc records for given object
 
 loaddate = loadlib.loaddate
 
-def showUsage():
-	# requires:
-	#
-	# effects:
-	# Displays the correct usage of this program and exits
-	# with status of 1.
-	#
-	# returns:
- 
-	usage = 'usage: %s -S server\n' % sys.argv[0] + \
-		'-D database\n' + \
-		'-U user\n' + \
-		'-P password file\n' + \
-		'-M mode\n' + \
-		'-O object type\n' + \
-		'-I input file\n'
-	exit(1, usage)
- 
 def exit(status, message = None):
 	# requires: status, the numeric exit status (integer)
 	#           message (string)
@@ -151,59 +130,14 @@ def init():
 	# returns:
 	#
  
-	global inputFile, diagFile, errorFile, errorFileName, diagFileName, passwordFileName
+	global inputFile, diagFile, errorFile, errorFileName, diagFileName
 	global refFileName, refFile
-	global mode, mgiTypeKey
+	global mgiTypeKey
 	global refAssocKey, createdByKey
  
-	try:
-		optlist, args = getopt.getopt(sys.argv[1:], 'S:D:U:P:M:O:I:')
-	except:
-		showUsage()
- 
-	#
-	# Set server, database, user, passwords depending on options
-	# specified by user.
-	#
- 
-	server = ''
-	database = ''
-	user = ''
-	password = ''
-	mgiType = ''
- 
-	for opt in optlist:
-                if opt[0] == '-S':
-                        server = opt[1]
-                elif opt[0] == '-D':
-                        database = opt[1]
-                elif opt[0] == '-U':
-                        user = opt[1]
-                elif opt[0] == '-P':
-			passwordFileName = opt[1]
-                elif opt[0] == '-M':
-                        mode = opt[1]
-                elif opt[0] == '-O':
-                        mgiType = opt[1]
-                elif opt[0] == '-I':
-                        inputFileName = opt[1]
-                else:
-                        showUsage()
-
-	# User must specify Server, Database, User and Password
-	password = string.strip(open(passwordFileName, 'r').readline())
-	if server == '' or \
-	   database == '' or \
-	   user == '' or \
-	   password == '' or \
-	   mode == '' or \
-	   mgiType == '' or \
-	   inputFileName == '':
-		showUsage()
-
-	# Initialize db.py DBMS parameters
-	db.set_sqlLogin(user, password, server, database)
 	db.useOneConnection(1)
+        db.set_sqlUser(user)
+        db.set_sqlPassword(passwordFileName)
  
 	fdate = mgi_utils.date('%m%d%Y')	# current date
 	head, tail = os.path.split(inputFileName) 
@@ -238,9 +172,8 @@ def init():
 	db.set_sqlLogFD(diagFile)
 
 	diagFile.write('Start Date/Time: %s\n' % (mgi_utils.date()))
-	diagFile.write('Server: %s\n' % (server))
-	diagFile.write('Database: %s\n' % (database))
-	diagFile.write('User: %s\n' % (user))
+	diagFile.write('Server: %s\n' % (db.get_sqlServer()))
+	diagFile.write('Database: %s\n' % (db.get_sqlDatabase()))
 	diagFile.write('Object Type: %s\n' % (mgiType))
 	diagFile.write('Input File: %s\n' % (inputFileName))
 

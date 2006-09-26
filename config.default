@@ -1,0 +1,15 @@
+#!/bin/csh -f
+
+#
+# Synonym load configuration file
+#
+
+source ./Configuration
+
+setenv REFMODE		load
+setenv REFDATADIR	?
+setenv REFINPUTFILE	${REFDATADIR}/input/?
+setenv REFLOG		${REFDATADIR}/logs/?
+setenv REFOBJECTTYPE	Marker
+setenv CREATEDBY	lec
+
