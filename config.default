@@ -4,7 +4,7 @@
 # default configuration file
 #
 
-source ./Configuration
+source ${REFERENCELOAD}/Configuration
 
 setenv REFMODE		load
 setenv REFDATADIR	?
