@@ -182,8 +182,8 @@ def init():
 	mgiTypeKey = loadlib.verifyMGIType(mgiType, 0, errorFile)
 	createdByKey = loadlib.verifyUser(createdBy, 0, errorFile)
 
-	db.sql('delete from MGI_Reference_Assoc where _MGIType_key = %d ' % (mgiTypeKey) + \
-		'and _CreatedBy_key = %d ' % (createdByKey), None)
+	#db.sql('delete from MGI_Reference_Assoc where _MGIType_key = %d ' % (mgiTypeKey) + \
+	#	'and _CreatedBy_key = %d ' % (createdByKey), None)
 
 def verifyMode():
 	# requires:
@@ -302,14 +302,14 @@ def processFile():
 			accID = tokens[0]
 			jnum = tokens[1]
 			refAssocType = tokens[2]
-#			createdBy = tokens[3]
+			createdBy = tokens[3]
 		except:
 			exit(1, 'Invalid Line (%d): %s\n' % (lineNum, line))
 
 		objectKey = loadlib.verifyObject(accID, mgiTypeKey, None, lineNum, errorFile)
 		referenceKey = loadlib.verifyReference(jnum, lineNum, errorFile)
 		refAssocTypeKey = verifyRefAssocType(refAssocType, lineNum)
-#		createdByKey = loadlib.verifyUser(createdBy, lineNum, errorFile)
+		createdByKey = loadlib.verifyUser(createdBy, lineNum, errorFile)
 
 		if objectKey == 0 or \
 			referenceKey == 0 or \
