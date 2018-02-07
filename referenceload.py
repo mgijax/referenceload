@@ -218,7 +218,7 @@ def setPrimaryKeys():
 
 	global refAssocKey
 
-        results = db.sql('select maxKey = max(_Assoc_key) + 1 from MGI_Reference_Assoc', 'auto')
+	results = db.sql(''' select nextval('mgi_reference_assoc_seq') as maxKey ''', 'auto')
         if results[0]['maxKey'] is None:
                 refAssocKey = 1000
         else:
@@ -363,6 +363,9 @@ def bcpFiles():
 	diagFile.write('%s\n' % bcp1)
 
 	os.system(bcp1)
+
+    	# update mgi_reference_assoc_seq auto-sequence
+        db.sql(''' select setval('mgi_reference_assoc_seq', (select max(_Assoc_key) + 1 from MGI_Reference_Assoc)) ''', None)
 
 #
 # Main
